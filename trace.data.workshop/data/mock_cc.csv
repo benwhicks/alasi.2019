@@ -1,0 +1,138 @@
+pk1,parent_pk1,title,type
+pk2627299,pk2627290,Lesson 1.1,content
+pk2627312,pk2627290,Lesson 1.2,content
+pk2627319,pk2627290,Lesson 1.3,content
+pk2627331,pk2627290,Lesson 1.4,content
+pk2627335,pk2627290,Lesson 1.5,content
+pk2627350,pk2627290,Lesson 1.6,content
+pk2627307,pk2627291,Lesson 2.1,content
+pk2627314,pk2627291,Lesson 2.2,content
+pk2627324,pk2627291,Lesson 2.3,content
+pk2627333,pk2627291,Lesson 2.4,content
+pk2627338,pk2627291,Lesson 2.5,content
+pk2627348,pk2627291,Lesson 2.6,content
+pk2627301,pk2627292,Lesson 3.1,content
+pk2627310,pk2627292,Lesson 3.2,content
+pk2627320,pk2627292,Lesson 3.3,content
+pk2627329,pk2627292,Lesson 3.4,content
+pk2627337,pk2627292,Lesson 3.5,content
+pk2627344,pk2627292,Lesson 3.6,content
+pk2627304,pk2627293,Lesson 4.1,content
+pk2627311,pk2627293,Lesson 4.2,content
+pk2627321,pk2627293,Lesson 4.3,content
+pk2627328,pk2627293,Lesson 4.4,content
+pk2627343,pk2627293,Lesson 4.5,content
+pk2627351,pk2627293,Lesson 4.6,content
+pk2627355,pk2627293,Lesson 4.7,content
+pk2627305,pk2627294,Lesson 5.1,content
+pk2627313,pk2627294,Lesson 5.2,content
+pk2627323,pk2627294,Lesson 5.3,content
+pk2627330,pk2627294,Lesson 5.4,content
+pk2627339,pk2627294,Lesson 5.5,content
+pk2627349,pk2627294,Lesson 5.6,content
+pk2627300,pk2627295,Lesson 6.1,content
+pk2627315,pk2627295,Lesson 6.2,content
+pk2627317,pk2627295,Lesson 6.3,content
+pk2627326,pk2627295,Lesson 6.4,content
+pk2627340,pk2627295,Lesson 6.5,content
+pk2627303,pk2627296,Lesson 7.1,content
+pk2627316,pk2627296,Lesson 7.2,content
+pk2627318,pk2627296,Lesson 7.3,content
+pk2627332,pk2627296,Lesson 7.4,content
+pk2627336,pk2627296,Lesson 7.5,content
+pk2627306,pk2627297,Lesson 8.1,content
+pk2627309,pk2627297,Lesson 8.2,content
+pk2627322,pk2627297,Lesson 8.3,content
+pk2627334,pk2627297,Lesson 8.4,content
+pk2627302,pk2627298,Lesson 9.1,content
+pk2627308,pk2627298,Lesson 9.2,content
+pk2627325,pk2627298,Lesson 9.3,content
+pk2627327,pk2627298,Lesson 9.4,content
+pk2627342,pk2627298,Lesson 9.5,content
+pk2627346,pk2627298,Lesson 9.6,content
+pk2627287,pk2627280,Your study guide,document
+pk2627366,pk2627276,Lecture slides,document
+pk2627363,pk2627276,Extra questions and solutions,document
+pk2627362,pk2627276,Assessment guidance,document
+pk2836299,pk2627279,Assessment online help session,externaltool1
+pk2627354,pk2627290,PDF of Topic 1,file
+pk2627352,pk2627291,PDF of Topic 2,file
+pk2627357,pk2627292,PDF of Topic 3,file
+pk2627358,pk2627293,PDF of Topic 4,file
+pk2627353,pk2627294,PDF of Topic 5,file
+pk2627345,pk2627295,PDF of Topic 6,file
+pk2627347,pk2627296,PDF of Topic 7,file
+pk2627341,pk2627297,PDF of Topic 8,file
+pk2627356,pk2627298,PDF of Topic 9,file
+pk2493997,,Library Folder,folder
+pk2494009,pk2493997,Library Link,resource
+pk2627364,pk2627276,Exam support,document
+pk2627275,,Home,folder
+pk2494017,pk2493999,Important Forms,resource
+pk2493996,,Learning Opportunities,folder
+pk2494018,pk2493999,Most Accessed Student Policies,resource
+pk2789593,pk2627279,Online Introduction Meeting,externaltool1
+pk2627278,,Online Meeting (Adobe Connect),folder
+pk2788948,pk2788947,Online meeting night,survey
+pk2627279,,Online meeting recordings,folder
+pk2627282,pk2627278,Online Meeting/Tutorial Schedule,document
+pk2822346,pk2627279,Tutorial 2,externaltool1
+pk2826436,pk2627279,Tutorial 3,externaltool1
+pk2803232,pk2627279,Tutorial 1,externaltool1
+pk2627286,pk2627277,Joint marking tool,externaltool2
+pk2627277,,Joint marking tool,folder
+pk2627379,pk2627275,Pre-learning,document
+pk2627276,,Resources,folder
+pk2627365,pk2627276,Self-test solutions,document
+pk2494014,pk2493999,Calendar,resource
+pk2494015,pk2493999,Student Hub,resource
+pk2788947,,Survey,folder
+pk2494016,pk2493999,Student Portal,resource
+pk2627280,,Tips for working with your online Study Guide,folder
+pk2627290,pk2627289,Overview of Topic 1,folder
+pk2627291,pk2627289,Overview of Topic 2,folder
+pk2627292,pk2627289,Overview of Topic 3,folder
+pk2627293,pk2627289,Overview of Topic 4,folder
+pk2627294,pk2627289,Overview of Topic 5,folder
+pk2627295,pk2627289,Overview of Topic 6,folder
+pk2627296,pk2627289,Overview of Topic 7,folder
+pk2627297,pk2627289,Overview of Topic 8,folder
+pk2627298,pk2627289,Overview of Topic 9,folder
+pk2627289,pk2627280,Topics,lesson
+pk2789214,pk2627276,Updated Study Schedule,document
+pk2493999,,Links,folder
+pk2627390,,Welcome,content
+pk2627370,pk2627275,What's happening W10,document
+pk2627369,pk2627275,What's happening W11,document
+pk2627368,pk2627275,What's happening W12,document
+pk2627377,pk2627275,What's happening W2,document
+pk2627376,pk2627275,What's happening W3,document
+pk2627375,pk2627275,What's happening W4,document
+pk2627374,pk2627275,What's happening W5,document
+pk2627373,pk2627275,What's happening W6,document
+pk2627371,pk2627275,What's happening W9,document
+pk2627367,pk2627275,What's happening W13 and W14,document
+pk2627372,pk2627275,What's happening W7 and W8,document
+pk10001,pk10006,Discussion Board,forum
+pk10002,,Announcements (Entry),admin
+pk10003,,Services,admin
+pk10004,pk10014,Check Grades,admin
+pk10005,,View Announcements (mobile),admin
+pk10006,,Main Forum,forum
+pk10007,pk10002,Announcements,admin
+pk10008,pk2627275,Contacts,admin
+pk10009,pk10006,Forum: Assessment items,forum
+pk10010,,Submission Receipts,admin
+pk10011,,Wiki,admin
+pk10012,pk10006,Forums (mobile),forum
+pk10013,pk10014,Check Grades (mobile),admin
+pk10014,,Grades,admin
+pk10015,pk10001,Discussion Board Reply,forum
+pk10016,pk10006,Forum: Assessment,forum
+pk10017,pk10006,Forum: Subject Forum,forum
+pk10018,pk10006,Thread list (mobile),forum
+pk10019,pk10006,View thread (mobile),forum
+pk10020,pk10007,Announcements (check),admin
+pk10021,,Pick,admin
+pk10022,pk2627275,Main,admin
+pk10023,pk2627275,Menu,admin

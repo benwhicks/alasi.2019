@@ -1,0 +1,217 @@
+---
+title: "feature_engineering"
+author: "Ben Hicks"
+date: "13/11/2019"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)
+library(rdata.psych)
+```
+
+The activity data involves a series of events, each marked with a _timestamp_ of when it occured and involving a particular _person_ and _item_. A sample is below:
+
+``` {r activity_sample}
+set.seed(42)
+head(aaBio18 %>% select(timestamp, person, item = content) %>% sample_n(20)) %>% 
+    knitr::kable()
+```
+
+## Feature Generation
+
+This data needs some processing to make it accessible to analysis from standard methods, as the pattern of clicks is not quite a time series and certainly not a well formed data frame. This process is sometimes called an *embedding* in machine learning contexts or more broadly *feature engineering* or generation. 
+
+One approach is to take various summary statistics using the timestamps and item fields, connecting them in some way to each person using the site. I chose the following:
+
+1. _accesses_: The number of times the student has accessed the site.
+2. _mean clicks per access_: The average (mean) number of times the student clicks on all possible items during a single login session.
+3. _sd clicks_: The standard deviation of the number of clicks for each log in session.
+4. _total time_: The total amount of time the student spent on the site, for the duration of the study period.
+5. _median time per access_: The average (median) time a student spends on the site during a single login session. 
+6. _sd time_: The standard deviation of the time a student spends on the site for each login session.
+7. _forum views_: The number of times the student accessed any of the forum components of the course. 
+
+Other fields that are included, but not deemed part of the 'activity' data:
+
+- *grade*: The final mark the student achieved.
+- *grade quartile*: The quartile the student fell in this particular cohort with their grade. 
+
+Some other fields that could have been considered (in hindsight), but were not:
+
+- *mean timestamp*: The average (mean) of the timestamps for a student. This would give an indication of the centre of the students activity in the course, later indicating more work done towards the end of the course.
+- *median timestamp*: The average (median) of the timestamps of the student. Combined with the mean this will help give some information of the shape of the distribution of timestamps as well as the centre.
+
+## Clustering
+
+The clustering was performed using the features 1-7 listed above, as well as sometimes using *grade* as an additional 8th variable. This was done for 2 through to 5 clusters. The question is; how useful are the 7 features in predicting the clusters, or are some of them unnecessariy?
+
+``` {r cluster_plot}
+# TODO: include a plot here of the clustering
+```
+
+# Analysis of Feature Engineering
+
+The question we try to answer here is *how useful was this choice of features?* Can these features predict academic success (*grade*) to any degree, and if so which variables are most useful? If we use the features to predict the clusters themselves, which variables are dominant?
+
+## Predicting Academic Performance from Features
+
+We analyse the effectiveness of the features in predicting grade by constructing a series of linear models and then selecting an 'optimal' model using a stepwise algorithm.
+
+``` {r data_setup}
+# Setting up data
+DF  <-  tibble(subject = c("B1", "B2", "S1", "S2"), 
+            data = list(nodesBio17, nodesBio18, nodesSoc17, nodesSoc18))
+
+DF <- DF %>%
+    mutate(data_grade = map(data, 
+                      . %>% 
+                          select(grade = Grade,
+                                 accesses = Accesses, mean_clicks_per_access:sd_time, 
+                                 total_time = TotalTime, forum_views = ForumViews))) %>%
+    mutate(data_cluster = map(data,
+                               . %>% 
+                                   select(starts_with("cluster_"),
+                                                      accesses = Accesses, mean_clicks_per_access:sd_time, 
+                                                      total_time = TotalTime, forum_views = ForumViews))) 
+
+scale_features <- function(x) {
+    bind_cols(x %>% 
+                  select(accesses, mean_clicks_per_access, sd_clicks,
+                         median_time_per_access, sd_time, total_time, forum_views) %>% 
+                  scale() %>% 
+                  as_tibble(),
+              x %>% 
+                  select(-accesses, -mean_clicks_per_access, -sd_clicks,
+                         -median_time_per_access, -sd_time, -total_time, -forum_views))
+}
+
+DF <- DF %>% 
+    mutate(data_grade = map(data_grade, scale_features),
+           data_cluster = map(data_cluster, scale_features))
+```
+
+``` {r academic_prediction}
+fit_grade <- function(x) {
+    lm(grade ~ ., data = x)
+}
+
+stepper <- function(x, scale = F) {
+    if (scale) {x <- as_tibble(scale(x))}
+    step(lm(grade ~ . , data = x))
+}
+
+DF <- DF %>% 
+    mutate(fit = data_grade %>% map(fit_grade)) 
+
+model_summary <- tibble(
+    var = names(DF$fit[[1]]$coefficients),
+    B1 = DF$fit[[1]]$coefficients,
+    B2 = DF$fit[[2]]$coefficients,
+    S1 = DF$fit[[3]]$coefficients,
+    S2 = DF$fit[[4]]$coefficients
+)
+
+stepper(DF$data_grade[[1]])$coefficients %>% knitr::kable()
+stepper(DF$data_grade[[2]])$coefficients %>% knitr::kable()
+stepper(DF$data_grade[[3]])$coefficients %>% knitr::kable()
+stepper(DF$data_grade[[4]])$coefficients %>% knitr::kable()
+
+model_summary %>% knitr::kable()
+
+aov(grade ~ ., data = DF$data_grade[[1]]) %>% summary()
+aov(grade ~ ., data = DF$data_grade[[2]]) %>% summary()
+aov(grade ~ ., data = DF$data_grade[[3]]) %>% summary()
+aov(grade ~ ., data = DF$data_grade[[4]]) %>% summary()
+```
+
+| B1                    |          x|
+|:----------------------|----------:|
+|(Intercept)            |  0.5061776|
+|accesses               |  0.0013476|
+|mean_clicks_per_access |  0.0074411|
+|sd_clicks              | -0.0010587|
+|median_time_per_access | -0.0000328|
+
+|   B2                  |          x|
+|:----------------------|----------:|
+|(Intercept)            |  0.5054730|
+|accesses               |  0.0005197|
+|mean_clicks_per_access |  0.0075971|
+|sd_clicks              | -0.0007446|
+|median_time_per_access | -0.0000866|
+|sd_time                |  0.0000107|
+|forum_views            |  0.0000721|
+
+|  S1                   |          x|
+|:----------------------|----------:|
+|(Intercept)            |  0.6448613|
+|mean_clicks_per_access |  0.0050325|
+|sd_clicks              | -0.0034428|
+|median_time_per_access | -0.0000721|
+|sd_time                |  0.0000112|
+
+| S2         |         x|
+|:-----------|---------:|
+|(Intercept) | 0.6792890|
+|forum_views | 0.0001712|
+
+First of all, looking at the analysis of variance the residuals **way** out weigh the effects of the variables, so as a predictor it might not be the best but there is still something to be learned.
+
+Looking at the final models after selecting a model by AIC in a stepwise algorithm, there is some variation in the variables used in each data set to predict grade. The notable exclusion is *total time* which appeared in none of the models, even though it had a comparitively high coefficient in B1 and S1. Comparing time 1 to time 2, it is noticable that *forum views* appeared in the second running session and not the first, as in the second session refinement was made to the subject forum in these subjects. Of further note is the direction of the coefficients - *sd clicks* and *median time per access* remained negative throughout. It is worth pondering what this means in terms of student behaviour that larger total time but smaller median time is associated with stronger performance. 
+
+## Predicting the Clusters
+
+``` {r cluster_prediction}
+# Setting up data
+
+```
+
+
+
+``` {r comparing_clustering_vars}
+library(fpc)
+
+dist_clustering <- function(x, y) {
+    clust_x_vec <- pamk(x)$pamobject$clustering
+    clust_y_vec <- pamk(y)$pamobject$clustering
+    mean(!(clust_x_vec == clust_y_vec))
+}
+
+dist_clustering(
+    DF$data_grade[[1]] %>% filter(complete.cases(.)),
+    DF$data_grade[[1]] %>% filter(complete.cases(.)) %>% 
+        select(-accesses, -mean_clicks_per_access)
+)
+
+dist_clustering_drop_1 <- function(n, var) {
+    dist_clustering(
+        DF$data_grade[[n]] %>% filter(complete.cases(.)),
+        DF$data_grade[[n]] %>% filter(complete.cases(.)) %>% 
+            select(-var)
+    )
+}
+
+vars <- names(DF$data_grade[[1]])
+
+clust_aov <- tibble(
+    remove = vars,
+    b1 = map_dbl(.x = vars,
+        ~dist_clustering_drop_1(1, .x)
+    ),
+    B2 = map_dbl(.x = vars,
+        ~dist_clustering_drop_1(2, .x)
+    ),
+    S1 = map_dbl(.x = vars,
+        ~dist_clustering_drop_1(3, .x)
+    ),
+    S2 = map_dbl(.x = vars,
+        ~dist_clustering_drop_1(4, .x)
+    )
+)
+ 
+clust_aov %>% 
+    knitr::kable(digits = 3, caption = "Cluster distance from removing one variable")
+
+```

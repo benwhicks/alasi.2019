@@ -1,0 +1,567 @@
+---
+title: "activity_analysis"
+author: "Ben Hicks"
+date: "15/10/2019"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE, warning = F, message = F)
+
+# Packages
+suppressPackageStartupMessages(library(tidygraph))
+suppressPackageStartupMessages(library(ggraph))
+suppressPackageStartupMessages(library(tidyverse))
+suppressPackageStartupMessages(library(lakit))
+suppressPackageStartupMessages(library(lubridate))
+suppressPackageStartupMessages(library(TDAmapper))
+suppressPackageStartupMessages(library(TDA))
+suppressPackageStartupMessages(library(viridis))
+suppressPackageStartupMessages(library(colorspace))
+suppressPackageStartupMessages(library(patchwork))
+
+
+# Data
+prep_aa <- function(aa) {
+    aa %>% 
+        as_tibble() %>% 
+        select(person, subject, subject_code, role, row_status,
+               session, event, handle, data, content_pk1, content, 
+               grade_quartile, starts_with("cluster"),
+               timestamp)
+}
+
+# Functions
+aa_to_person_intervals <- function(aa, cluster_var, frac = 0.01) {
+    df <- aa %>% 
+        rename(cluster = {{cluster_var}}) %>% 
+        group_by(person, session, cluster,
+                 grade_quartile, row_status) %>% 
+        nest() %>% 
+        mutate(nums = map_int(data, nrow)) %>% 
+        filter(nums > 1) %>% 
+        select(-nums) %>% 
+        mutate(interval_dfs = map(
+            data, 
+            ~data.frame(
+                intervals = 
+                    as.numeric(
+                        timelist_to_difference(.$timestamp, frac = frac))
+                ))) %>%
+        select(-data) %>% 
+        unnest(cols = interval_dfs) %>% 
+        mutate(intervals = as.duration(intervals)) %>% 
+        filter(as.duration(intervals) < as.duration('1 day'),
+               !is.na(grade_quartile))
+    df$cluster <- factor(df$cluster)
+    return(df)
+}
+
+aa_to_person_intervals_all_clusters <- function(aa, frac = 0.05) {
+    df <- aa %>% 
+        group_by(person, session, 
+                 cluster_2, cluster_3, cluster_4, cluster_5,
+                 grade_quartile, row_status) %>% 
+        nest() %>% 
+        mutate(nums = map_int(data, nrow)) %>% 
+        filter(nums > 1) %>% 
+        select(-nums) %>% 
+        mutate(interval_dfs = map(
+            data, 
+            ~data.frame(
+                intervals = 
+                    as.numeric(
+                        timelist_to_difference(.$timestamp, frac = frac))
+                ))) %>%
+        select(-data) %>% 
+        unnest(cols = interval_dfs) %>% 
+        mutate(intervals = as.duration(intervals)) %>% 
+        filter(as.duration(intervals) < as.duration('1 day'),
+               !is.na(grade_quartile))
+    df$cluster_2 <- factor(df$cluster_2)
+    df$cluster_3 <- factor(df$cluster_3)
+    df$cluster_4 <- factor(df$cluster_4)
+    df$cluster_5 <- factor(df$cluster_5)
+    return(df)
+}
+
+plot_clusters <- function(n, cluster_var) {
+    DF$nd[[n]] %>% 
+        filter(Person != "Student321") %>% 
+        ggplot(aes(x = Dim1, y = Dim2, color = factor({{cluster_var}}))) +
+        geom_point() +
+        theme_minimal() +
+        theme(legend.position = "none") +
+        scale_color_discrete_qualitative(palette = "Dark 3") +
+        geom_mark_ellipse(aes(label = {{cluster_var}}))
+}
+```
+
+``` {r DF_setup, eval = F}
+# Setting up DF
+DF <- tibble(
+    subject = c("Bio", "Bio", "Soc", "Soc"),
+    year = c(2017, 2018, 2017, 2018),
+    aa = list(rdata.psych::aaBio17 %>% prep_aa(),
+              rdata.psych::aaBio18 %>% prep_aa(),
+              rdata.psych::aaSoc17 %>% prep_aa(),
+              rdata.psych::aaSoc18 %>% prep_aa()),
+    nd = list(rdata.psych::nodesBio17 %>% drop_na() %>% as_tibble(),
+              rdata.psych::nodesBio18 %>% drop_na() %>% as_tibble(),
+              rdata.psych::nodesSoc17 %>% drop_na() %>% as_tibble(),
+              rdata.psych::nodesSoc18 %>% drop_na() %>% as_tibble())
+)
+```
+
+
+``` {r building_interval_dfs, cache = TRUE, eval = FALSE}
+# Building intervals dfs
+intervals_A1 <- aaA1 %>% 
+    aa_to_person_intervals_all_clusters()
+intervals_A2 <- aaA2 %>% 
+    aa_to_person_intervals_all_clusters()
+intervals_B1 <- aaB1 %>% 
+    aa_to_person_intervals_all_clusters()
+intervals_B2 <- aaB2 %>% 
+    aa_to_person_intervals_all_clusters()
+```
+
+``` {r writing_interval_dfs, eval = FALSE}
+write_rds(intervals_A1, 'intervals_A1_stored.rds')
+write_rds(intervals_A2, 'intervals_A2_stored.rds')
+write_rds(intervals_B1, 'intervals_B1_stored.rds')
+write_rds(intervals_B2, 'intervals_B2_stored.rds')
+```
+
+``` {r readings_interval_dfs, eval = FALSE}
+intervals_A1 <- read_rds('intervals_A1_stored.rds') # B-17
+intervals_A2 <- read_rds('intervals_A2_stored.rds')
+intervals_B1 <- read_rds('intervals_B1_stored.rds')
+intervals_B2 <- read_rds('intervals_B2_stored.rds')
+# TODO : Re-write sampling of intervals but per student (this will help with comparing with TDA later)
+# To speed up sample the timestamps; 100 starts and 100 finishes, with replacement, then take the difference of the 
+# two vectors.
+# Actually - might just need to join the new groups by person id.
+```
+
+``` {r adding_interval_dfs_to_DF, eval = F}
+DF$int <- list(intervals_B1, intervals_B2, intervals_A1, intervals_A2)
+rm(intervals_B1, intervals_B2, intervals_A1, intervals_A2)
+```
+
+# Topological Data Analysis
+
+``` {r tda_functions}
+# TDA; Mapper, Persistent Homology
+nodes_to_matrix <- function(nodes, scale = FALSE, marks = FALSE) {
+    nodes <- nodes %>% filter(complete.cases(nodes)) # shouldn't be needed as NA dropped earlier
+    X <- nodes %>% 
+        select(Grade, Accesses, 
+               mean_clicks_per_access, sd_clicks, 
+               median_time_per_access, sd_time, TotalTime, 
+               ForumViews)
+    if (!marks) {X <- X %>% select(-Grade)}
+    if (scale) {X <- scale(X)}
+    return(X)
+}
+
+as_duration_approx <- function(s) {
+    d <- as.duration(s) %>% 
+        as.character() %>% 
+        str_remove("^.* \\(") %>% 
+        str_remove("\\)$")
+    return(d)
+}
+
+nodes_text_summary <- function(nodes) {
+    n <- nrow(nodes)
+    grade <- mean(nodes$Grade, na.rm = T) %>% round(3)
+    accesses <- mean(nodes$Accesses, na.rm = T) %>% round(0)
+    clicks_pa <- mean(nodes$mean_clicks_per_access, na.rm = T) %>% round(0)
+    clicks_sd <- mean(nodes$sd_clicks, na.rm = T) %>% round(0)
+    time_md <- mean(nodes$median_time_per_access, na.rm = ) 
+    time_md_print <- time_md %>% 
+        round(0) %>% 
+        as_duration_approx()
+    time_sd <- mean(nodes$sd_time, na.rm = T) 
+    time_sd_print <- time_sd %>% 
+        round(0) %>% 
+        as_duration_approx()
+    time <- mean(nodes$TotalTime, na.rm = T) 
+    time_print <- time %>% 
+        round(0) %>% 
+        as_duration_approx()
+    forum <- mean(nodes$ForumViews, na.rm = T) %>% round(0)
+    text_out <- paste0("n: ", n, " G: ", grade, ", F: ", forum,
+                       "\nA: ", accesses, ":", clicks_pa, ":", clicks_sd,
+                       "\nT: ", time_print, ":", time_md_print, ":", time_sd_print)
+    df_out <- data.frame(summary = text_out,
+                         n = n, 
+                         grade = grade,
+                         forum = forum,
+                         accesses = accesses,
+                         clicks_pa = clicks_pa,
+                         clicks_sd = clicks_sd,
+                         time = time,
+                         time_md = time_md,
+                         time_sd = time_sd)
+    return(df_out)
+}
+
+mapper_vertex_summaries <- function(M, nodes) {
+    n_nodes <- length(M$points_in_vertex)
+    df <- 1:n_nodes %>% 
+        as.list() %>% 
+        map_df(~nodes_text_summary(nodes[M$points_in_vertex[[.x]] , ]))
+    df <- df %>% 
+        mutate(id = row_number()) %>% 
+        select(id, everything())
+    return(as_tibble(df))
+}
+
+cluster_vertex_summaries <- function(nodes, cluster_var) {
+    n_clusters <- nodes %>% 
+        pull({{cluster_var}}) %>% 
+        unique() %>% 
+        length()
+    df <- 1:n_clusters %>% 
+        as.list() %>% 
+        map_df(~nodes_text_summary(nodes %>% filter({{cluster_var}} == .x)))
+    df <- df %>% 
+        mutate(id = row_number()) %>% 
+        select(id, everything())
+    return(as_tibble(df))
+}
+
+plot_mapper_d3 <- function(M, nodes, ...) {
+    nodes <- nodes %>% filter(complete.cases(nodes))
+    v <- mapperVertices(M, nodes$Person)
+    e <- mapperEdges(M)
+    return(networkD3::forceNetwork(Links = e, 
+                                   Nodes = v,
+                                   Source = "Linksource", 
+                                   Target = "Linktarget",
+                                   Value = "Linkvalue",
+                                   Group = "Nodegroup",
+                                   NodeID = "Nodename",
+                                   Nodesize = "Nodesize",
+                                   ...))
+}
+
+
+plot_nodes_through_mapper_d3 <- function(nodes) {
+    plot_mapper_d3(nds_to_mapper(nodes), nodes)
+}
+
+nodes_to_mapper <- function(nodes, scale = TRUE, marks = FALSE,
+                          fv = NULL,
+                          ni = 6, po = 50, nb = 10) {
+    X <- nodes_to_matrix(nodes, scale = scale, marks = marks)
+    dist <- dist(X)
+    if (is.null(fv)) {
+        fv <- X[, 4]
+    } else {
+        fv <- X %>% as_tibble() %>% pull({{fv}})
+    }
+    Mapper <- mapper(dist_object = dist,
+                     filter_values = fv,
+                     num_intervals = ni,
+                     percent_overlap = po,
+                     num_bins_when_clustering = nb)
+    return(Mapper)
+}
+
+mapper_and_nodes_to_plot <- function(mapper, nodes, lyt = "fr", col_var, use_labels = FALSE, remove_isolates = F,
+                                     color_option = "D") {
+    # Takes a mapper and the original nodes and creates a network plot with summary statistics
+    mapper_nodes <- mapper_vertex_summaries(mapper, nodes) 
+    edges <- as_tbl_graph(mapper$adjacency) %>%
+        activate(edges) %>% 
+        as_tibble()
+    graph <- tbl_graph(nodes = mapper_nodes,
+                       edges = edges)
+    if (remove_isolates) {
+        graph <- graph %>% 
+            activate(nodes) %>% 
+            filter(!node_is_isolated())
+    }
+    g <- graph %>% 
+        ggraph(layout = lyt) +
+        geom_edge_link(alpha = 0.8) +
+        geom_node_point(aes(size = n, color = {{col_var}}), alpha = 0.8) +
+        scale_color_viridis(option = color_option) +
+        scale_size_continuous(range = c(2,6)) +
+        theme_graph() +
+        theme(legend.position = "none",
+              panel.background = element_rect(fill = "slategray1"))
+    if (use_labels) {
+        g <- g +
+            geom_node_label(aes(label = ifelse(n > 2, paste("Group:", id, summary), id), color = {{col_var}}),
+                            repel = F, size = 3) 
+    } else {
+        g <- g +
+            geom_node_text(aes(label = ifelse(n > 2, paste("Group:", id, summary), NA)),
+                           repel = F, size = 2) 
+    }
+    return(g)
+}
+
+plot_mapper <- function(n, ...) {
+    mapper_and_nodes_to_plot(
+        mapper = DF$Mapper[[n]],
+        nodes = DF$nd[[n]],
+        col_var = grade,
+        ...
+    )
+}
+
+plot_mapper_time <- function(n, ...) {
+    mapper_and_nodes_to_plot(
+        mapper = DF$Mapper.TotalTime[[n]],
+        nodes = DF$nd[[n]],
+        col_var = time,
+        ...
+    )
+}
+
+plot_mapper_time_g <- function(n) {
+    mapper_and_nodes_to_plot(
+        mapper = DF$Mapper.TotalTime.Grade[[n]],
+        nodes = DF$nd[[n]],
+        col_var = time
+    )
+}
+plot_mapper_time_sd <- function(n) {
+    mapper_and_nodes_to_plot(
+        mapper = DF$Mapper.sd_time[[n]],
+        nodes = DF$nd[[n]],
+        col_var = time
+    )
+}
+plot_mapper_time_sd_g <- function(n) {
+    mapper_and_nodes_to_plot(
+        mapper = DF$Mapper.sd_time.Grade[[n]],
+        nodes = DF$nd[[n]],
+        col_var = time
+    )
+}
+
+limits_from_matrix <- function(X) {
+    matrix(
+        c(apply(X, 2, min),
+          apply(X, 2, max))
+        , nrow = 2,
+        byrow = TRUE)
+}
+
+gDiag <- function(X, n = NULL, d = 2) {
+    if (!is.null(n)) {
+        d <- dim(X)[[1]]
+        n <- min(n, d)
+        X <- X[sample(1:d, n), ]
+    }
+    gridDiag(X,
+             FUN = distFct,
+             lim = limits_from_matrix(X),
+             by = 0.3,
+             maxdimension = d,
+             printProgress = TRUE)
+}
+
+plot_set_compare <- function(d, var1, var2) {
+    d %>% 
+        ggplot(aes(x = factor({{var1}}), 
+                   y = factor({{var2}}), 
+                   fill = n)) +
+        geom_tile() +
+        scale_fill_viridis(option = "D") +
+        theme_minimal() +
+        theme(legend.position = "none")
+}
+```
+
+``` {r tda, eval = F}
+DF <- DF %>% 
+    mutate(
+        M = map(nd, ~nodes_to_matrix(., scale = TRUE, marks = TRUE)),
+        M.no.grade = map(nd, ~nodes_to_matrix(., scale = TRUE, marks = FALSE)),
+        X = map(nd, ~scale(.x %>% select(Dim1, Dim2, Dim3))),
+        X.g = map(nd, ~scale(.x %>% select(Dim1, Dim2, Dim3, Grade)))
+    )
+
+DF <- DF %>% 
+    mutate(
+        Mapper = map(nd, ~nodes_to_mapper(., fv = "Grade", marks = TRUE)),
+        Mapper.TotalTime = map(nd, ~nodes_to_mapper(., fv = "TotalTime")),
+        Mapper.TotalTime.Grade = map(nd, ~nodes_to_mapper(., marks = TRUE, fv = "TotalTime")),
+        Mapper.sd_time = map(nd, ~nodes_to_mapper(., fv = "sd_time")),
+        Mapper.sd_time.Grade = map(nd, ~nodes_to_mapper(., marks = TRUE, fv = "sd_time")),
+        Mapper.Accesses = map(nd, ~nodes_to_mapper(., fv = "Accesses")),
+        Mapper.Accesses.Grade = map(nd, ~nodes_to_mapper(., marks = TRUE, fv = "Accesses"))
+    )
+
+for (n in 1:4) {
+    m_max <- length(DF$Mapper[[n]]$points_in_vertex)
+    
+    DF$nd[[n]]$mapper_vertex <- NA_integer_
+    for (m in 1:m_max) {
+        DF$nd[[n]][
+            DF$Mapper[[n]]$points_in_vertex[[m]],
+            ]$mapper_vertex <- m
+    }
+}
+
+for (n in 1:4) {
+    m_max <- length(DF$Mapper.TotalTime[[n]]$points_in_vertex)
+    
+    DF$nd[[n]]$mapper_vertex_time <- NA_integer_
+    for (m in 1:m_max) {
+        DF$nd[[n]][
+            DF$Mapper.TotalTime[[n]]$points_in_vertex[[m]],
+            ]$mapper_vertex_time <- m
+    }
+}
+
+rm(m, m_max, n)
+
+DF <- DF %>% 
+    mutate(
+        int = map2(.x = int,
+                   .y = nd,
+                   ~inner_join(.x, .y %>% select(person = Person, mapper_vertex),
+                               by = "person"))
+    )
+
+DF <- DF %>% 
+    mutate(cluster_mapper_compare = nd %>% 
+               map(~.x %>% 
+                       group_by(mapper_vertex, cluster_2, cluster_3, cluster_4, cluster_5) %>% 
+                       tally()))
+
+
+
+# Persistant homology
+
+DF <- DF %>% 
+    mutate(pHomDiag = map(X, gDiag),
+           pHomDiagGrade = map(X.g, gDiag))
+
+# Other clusters
+append_pamk_clusters <- function(nd, M) {
+    clustering <- fpc::pamk(M)
+    nd <- bind_cols(nd, 
+                    tibble(cluster = clustering$pamobject$clustering))
+    return(nd)
+}
+
+DF <- DF %>% 
+    mutate(
+        nd = map2(.x = nd,
+                   .y = M.no.grade,
+                   ~append_pamk_clusters(nd = .x, M = .y))
+    )
+```
+
+``` {r write_DF, eval = F}
+write_rds(DF, 'DF.rds')
+```
+
+``` {r read_DF}
+DF <- read_rds('DF.rds')
+```
+
+By using the Mapper algorithm [reference!] we examine the structure of the data in terms of neighbourhoods of points within the activity space, and how these neighbourhoods are connected. The Mapper algorithm requires the choice of a single variable of the underlying topological space to filtrate on, for which here we choose the *grade* variable. What this means is that the algorithm begins at the low end of the grades and gradually increases the grades whilst looking around and observing how the points in the space cluster and how these clusters connect. 
+
+The most interseting story was comparing the transition of the two subjects from 2017 to 2018 (with the change in resource design), and how this appears to affect the relationship between performance in the subject (*grade*, coloured) and online behaviour in the subject.
+
+``` {r tda_plots}
+set.seed(402)
+copt = "B"
+gridExtra::grid.arrange(
+    plot_mapper(1, color_option = copt) + ggtitle("Subject A", "2017"),
+    plot_mapper(2, color_option = copt) + ggtitle("Subject A", "2018"),
+    plot_mapper(3, color_option = copt) + ggtitle("Subject B", "2017"),
+    plot_mapper(4, color_option = copt) + ggtitle("Subject B", "2018")
+)
+gridExtra::grid.arrange(
+    plot_mapper_time(1, color_option = copt) + ggtitle("Subject A", "2017"),
+    plot_mapper_time(2, color_option = copt) + ggtitle("Subject A", "2018"),
+    plot_mapper_time(3, color_option = copt) + ggtitle("Subject B", "2017"),
+    plot_mapper_time(4, color_option = copt) + ggtitle("Subject B", "2018")
+)
+```
+
+``` {r}
+# Spectrums of some of the clusters in the mapper graphs
+plot_mapper(1, color_option = "A", use_labels = T) + ggtitle("Subject A", "2017")
+plot_timestamp_spectrum(DF$int[[1]], group = mapper_vertex) + 
+    facet_wrap(~mapper_vertex) +
+    ggtitle("Subject A", "2017")
+plot_mapper(2, color_option = "B", use_labels = T) + ggtitle("Subject A", "2018")
+plot_timestamp_spectrum(DF$int[[2]], group = mapper_vertex) + 
+    facet_wrap(~mapper_vertex) +
+    ggtitle("Subject A", "2018")
+plot_mapper(3, color_option = "C", use_labels = T) + ggtitle("Subject B", "2017")
+plot_timestamp_spectrum(DF$int[[3]], group = mapper_vertex) + 
+    facet_wrap(~mapper_vertex) +
+    ggtitle("Subject B", "2017")
+plot_mapper(4, color_option = "D", use_labels = T) + ggtitle("Subject B", "2018")
+plot_timestamp_spectrum(DF$int[[4]], group = mapper_vertex) + 
+    facet_wrap(~mapper_vertex) +
+    ggtitle("Subject B", "2018")
+```
+
+Of note is the 'self regulation' section between 1-10 seconds (wanting this low for higher self regulation), particularly in Sub B 2018.
+
+``` {r sub_B_spect}
+# TODO: Colour by grade?
+spect_compare_plot <- function(n, clust_var) {
+    nodedf <- DF$nd[[n]]
+    intdf <- DF$int[[n]]
+    if (clust_var %in% names(DF)) {
+        sumdf <- mapper_vertex_summaries(DF$Mapper[[n]], nodedf)
+        int_aug <- intdf %>% rename(group = mapper_vertex) %>% 
+            inner_join(sumdf %>% select(group = id, grade), by = "group")
+    } else {
+        if (clust_var %in% names(DF$nd[[n]])) {
+            int_aug <- intdf 
+            int_aug$group <- as.numeric(int_aug[[clust_var]])
+            sumdf <- nodedf
+            sumdf$group <- sumdf[[clust_var]]
+            sumdf <- sumdf %>% 
+                group_by(group) %>% 
+                summarise(grade = mean(Grade, na.rm = T))
+            int_aug <- int_aug %>% 
+                inner_join(sumdf, by = "group")
+        } else {
+            stop(paste(clust_var, "not found in DF or nd data"))
+        }
+    }
+    plot_timestamp_spectrum(int_aug, 
+                            group = group,
+                            color = grade)
+}
+
+spect_compare_plot(4, "cluster_5")
+spect_compare_plot(4, "mapper_vertex")
+
+```
+
+### Persistant Homology
+
+It is challenging to compute persistant homology barcodes or birth-death diagrams for 7 or 8 dimensional space, even with bootstrapping small samples, so here I have used the first 3 principal components as a representation for this data. The 3 components exclude grade data, so this is performed again with an additional Grade dimension.
+
+``` {r persistent_homology}
+plot(DF$pHomDiag[[1]]$diagram, barcode = T)
+plot(DF$pHomDiag[[2]]$diagram, barcode = T)
+plot(DF$pHomDiag[[3]]$diagram, barcode = T)
+plot(DF$pHomDiag[[4]]$diagram, barcode = T)
+
+plot(DF$pHomDiagGrade[[1]]$diagram, barcode = T)
+plot(DF$pHomDiagGrade[[2]]$diagram, barcode = T)
+plot(DF$pHomDiagGrade[[3]]$diagram, barcode = T)
+plot(DF$pHomDiagGrade[[4]]$diagram, barcode = T)
+
+
+
+```

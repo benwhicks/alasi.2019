@@ -3,3 +3,5 @@
 .Rproj.user
 *.rds
 de-anon.csv
+*.html
+*.pptx

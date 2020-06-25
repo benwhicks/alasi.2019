@@ -253,6 +253,10 @@ plot_nodes_through_mapper_d3 <- function(nodes) {
     plot_mapper_d3(nds_to_mapper(nodes), nodes)
 }
 
+plot_mapper_nd3 <- function(n, mapper_field = "Mapper") {
+    plot_mapper_d3(DF[[mapper_field]][[n]], DF$nd[[n]])
+}
+
 nodes_to_mapper <- function(nodes, scale = TRUE, marks = FALSE,
                           fv = NULL,
                           ni = 6, po = 50, nb = 10) {

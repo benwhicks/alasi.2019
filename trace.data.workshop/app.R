@@ -151,6 +151,23 @@ map_student_activity_to_cluster_df <- function(x) {
     return(df)
 }
 
+map_content_to_intervals <- function(aa, cc, filter = TRUE) {
+    x <- inner_join(aa, cc, by = "pk1") %>% 
+        select(person, timestamp, type)
+    intervals <- x %>% 
+        group_by(type, person) %>% 
+        nest() %>% 
+        mutate(intervals = map(data, 
+                               ~timelist_to_difference(.$timestamp))) %>% 
+        select(-data) %>% 
+        unnest(intervals) 
+    if (filter) {
+        intervals <- intervals %>% 
+            filter(intervals < as.duration(60*60*24))
+    }
+    return(intervals) 
+}
+
 plot_timestamp_spectrum <- function(df, trans = 'log10', group = NULL, color = NULL, lower_x_lim = 0.1, ...) {
     # This function could use some optimisation
     if(!("intervals" %in% names(df))) stop("No column named 'intervals' in data frame")
@@ -174,6 +191,7 @@ plot_timestamp_spectrum <- function(df, trans = 'log10', group = NULL, color = N
     return(g)
 }
 
+# Student lens
 DFint <- map_student_activity_to_intervals(aa)
 DFsum <- map_student_activity_to_df(aa)
 DFclust <- map_student_activity_to_cluster_df(DFsum)
@@ -192,6 +210,13 @@ DFsum <- DFsum %>%
     select(person, grade, everything())
 DFclust <- DFclust %>% 
     inner_join(gb, by = "person")
+
+# Content lens
+DFcontint <- map_content_to_intervals(aa, cc)
+DFcontint <- left_join(DFcontint, 
+                       DFclust %>% 
+                           select(person, starts_with('cluster')),
+                       by = "person")
 
 # Define UI for application that draws a histogram
 ui <- fluidPage(
@@ -216,10 +241,13 @@ ui <- fluidPage(
                                  plotOutput("intervalPlot"),
                                  tableOutput("tableSummary")),
                         tabPanel("Cluster",
-                                 tableOutput("clusterSummary"),
-                                 plotOutput("clusterSpectrums"),
                                  plotOutput("clusterPlot2d"),
-                                 plotlyOutput("clusterPlot3d"))
+                                 plotlyOutput("clusterPlot3d"),
+                                 tableOutput("clusterSummary"),
+                                 plotOutput("clusterSpectrums")
+                                 ),
+                        tabPanel("Content",
+                                 plotOutput("contentSpectrums"))
             )
         )
     )
@@ -328,6 +356,39 @@ server <- function(input, output) {
                                             group = factor(cluster_5),
                                             color = factor(cluster_5)) +
                         colorspace::scale_colour_discrete_qualitative()
+                }
+            }
+        }
+    })
+    
+    output$contentSpectrums <- renderPlot({
+        # This is horrible code but it should work
+        if (input$k == 2) {
+            plot_timestamp_spectrum(DFcontint, 
+                                    group = factor(cluster_2),
+                                    color = factor(cluster_2)) +
+                colorspace::scale_colour_discrete_qualitative() +
+                facet_wrap(~type, scales = "free_y")
+        } else {
+            if (input$k == 3) {
+                plot_timestamp_spectrum(DFcontint, 
+                                        group = factor(cluster_3),
+                                        color = factor(cluster_3)) +
+                    colorspace::scale_colour_discrete_qualitative()+
+                    facet_wrap(~type, scales = "free_y")
+            } else {
+                if (input$k == 4) {
+                    plot_timestamp_spectrum(DFcontint, 
+                                            group = factor(cluster_4),
+                                            color = factor(cluster_4)) +
+                        colorspace::scale_colour_discrete_qualitative()+
+                        facet_wrap(~type, scales = "free_y")
+                } else {
+                    plot_timestamp_spectrum(DFcontint, 
+                                            group = factor(cluster_5),
+                                            color = factor(cluster_5)) +
+                        colorspace::scale_colour_discrete_qualitative()+
+                        facet_wrap(~type, scales = "free_y")
                 }
             }
         }

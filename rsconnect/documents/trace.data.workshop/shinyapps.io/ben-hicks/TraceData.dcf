@@ -5,8 +5,8 @@ account: ben-hicks
 server: shinyapps.io
 hostUrl: https://api.shinyapps.io/v1
 appId: 1532549
-bundleId: 2621740
+bundleId: 2621880
 url: https://ben-hicks.shinyapps.io/TraceData/
-when: 1574857678.9637
+when: 1574861987.64931
 asMultiple: FALSE
 asStatic: FALSE
